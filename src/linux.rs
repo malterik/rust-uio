@@ -8,6 +8,7 @@ use std::io::prelude::*;
 use std::mem::transmute;
 use std::num::ParseIntError;
 use std::os::unix::prelude::AsRawFd;
+use std::i64;
 
 const PAGESIZE: usize = 4096;
 
@@ -49,6 +50,7 @@ impl UioDevice {
     /// # Arguments
     ///  * uio_num - UIO index of device (i.e., 1 for /dev/uio1)
     pub fn new(uio_num: usize) -> io::Result<UioDevice> {
+        println!("Hallo na");
         let path = format!("/dev/uio{}", uio_num);
         let devfile = try!(OpenOptions::new().read(true).write(true).open(path));
         devfile.lock_exclusive()?;
@@ -85,20 +87,23 @@ impl UioDevice {
     ///   * bar_nr: The index to the given resource (i.e., 1 for /sys/class/uio/uioX/device/resource1)
     pub fn map_resource(&self, bar_nr: usize) -> Result<*mut libc::c_void, UioError> {
         let filename = format!(
-            "/sys/class/uio/uio{}/device/resource{}",
+            "/sys/class/uio/uio{}/maps/map{}/size",
             self.uio_num, bar_nr
         );
-        let f = try!(OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(filename.to_string()));
-        let metadata = try!(fs::metadata(filename.clone()));
+        let hex_content = fs::read_to_string(filename).expect("Cannot read size from uio mapping");
+        let without_prefix = hex_content.trim_start_matches("0x");
+        let size = i64::from_str_radix(without_prefix.trim_end(), 16).unwrap();
+
+        let f = OpenOptions::new()
+                     .read(true)
+                     .write(true)
+                     .open(format!("/dev/uio{}", self.uio_num))?;
         let fd = f.as_raw_fd();
 
         let res = unsafe {
             nix::sys::mman::mmap(
                 0 as *mut libc::c_void,
-                metadata.len() as usize,
+                size as usize,
                 ProtFlags::PROT_READ | ProtFlags::PROT_WRITE,
                 MapFlags::MAP_SHARED,
                 fd,
