@@ -50,7 +50,6 @@ impl UioDevice {
     /// # Arguments
     ///  * uio_num - UIO index of device (i.e., 1 for /dev/uio1)
     pub fn new(uio_num: usize) -> io::Result<UioDevice> {
-        println!("Hallo na");
         let path = format!("/dev/uio{}", uio_num);
         let devfile = try!(OpenOptions::new().read(true).write(true).open(path));
         devfile.lock_exclusive()?;
